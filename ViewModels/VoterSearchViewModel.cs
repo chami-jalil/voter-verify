@@ -23,7 +23,7 @@ public partial class VoterSearchViewModel : ViewModelBase, IQueryAttributable
     private string query = "";
 
     [ObservableProperty]
-    private string emptyMessage = "Search by serial number, EPIC, name, or house number.";
+    private string emptyMessage = "Search by serial number, EPIC, assembly roll, name, or house number.";
 
     [ObservableProperty]
     private string resultSummary = "";
@@ -81,7 +81,7 @@ public partial class VoterSearchViewModel : ViewModelBase, IQueryAttributable
             EmptyMessage = "";
             if (outcome.ScanLimitReached)
             {
-                ResultSummary = "The ward list is larger than one search pass. Showing matches found so far. A serial number or EPIC is exact.";
+                ResultSummary = "The ward list is larger than one search pass. Showing matches found so far. A serial number, EPIC, or assembly roll reference is exact.";
             }
             else if (outcome.Truncated)
             {

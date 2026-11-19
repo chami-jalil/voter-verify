@@ -76,6 +76,26 @@ public sealed class AzureTableVoterDataService : IVoterDataService
                     _ => true,
                     cancellationToken);
             }
+            else if (mode == VoterLookupMode.AssemblyRoll)
+            {
+                if (TableKeyRules.IsValid(trimmed))
+                {
+                    var exact = await ReadVoterAsync(wardId, trimmed, cancellationToken);
+                    if (exact is not null)
+                    {
+                        var hit = TableEntityMapper.ToHit(exact);
+                        hits[hit.SerialNumber] = hit;
+                    }
+                }
+
+                var reference = VoterLookup.NormalizeAssemblyRoll(trimmed);
+                truncated = await CollectQueryAsync(
+                    _voters,
+                    VoterQueryBuilder.AssemblyRoll(wardId, reference),
+                    hits,
+                    entity => VoterTextMatch.MatchesAssemblyRoll(entity.AssemblyRollReference, trimmed),
+                    cancellationToken);
+            }
             else if (mode == VoterLookupMode.KeyAndHouse)
             {
                 if (TableKeyRules.IsValid(trimmed))
@@ -91,11 +111,14 @@ public sealed class AzureTableVoterDataService : IVoterDataService
                 var normalizedHouse = VoterLookup.NormalizeHouse(trimmed);
                 if (normalizedHouse.Length > 0)
                 {
+                    // Prefix range on NormalizedHouseNumber. Table Storage cannot
+                    // filter with contains, so a house that only contains the
+                    // text in the middle is not requested.
                     truncated = await CollectQueryAsync(
                         _voters,
                         VoterQueryBuilder.House(wardId, trimmed, normalizedHouse),
                         hits,
-                        _ => true,
+                        entity => VoterTextMatch.MatchesHouse(entity.HouseNumber, entity.NormalizedHouseNumber, trimmed),
                         cancellationToken);
                 }
             }

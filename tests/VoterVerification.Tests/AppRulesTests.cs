@@ -72,6 +72,11 @@ public class VoterLookupTests
     [InlineData("12-A", VoterLookupMode.KeyAndHouse)]
     [InlineData("abc1234567", VoterLookupMode.Epic)]
     [InlineData("ABC 1234567", VoterLookupMode.Epic)]
+    [InlineData("175/42/123", VoterLookupMode.AssemblyRoll)]
+    [InlineData("  175 / 42 / 123  ", VoterLookupMode.AssemblyRoll)]
+    [InlineData("175-42-123", VoterLookupMode.AssemblyRoll)]
+    [InlineData("175/42", VoterLookupMode.KeyAndHouse)]
+    [InlineData("12/A", VoterLookupMode.KeyAndHouse)]
     [InlineData("రామ", VoterLookupMode.Name)]
     [InlineData("Rama", VoterLookupMode.Name)]
     public void ClassifiesSearchText(string query, VoterLookupMode mode)
@@ -80,18 +85,67 @@ public class VoterLookupTests
     }
 
     [Fact]
-    public void NormalizesEpicAndHouse()
+    public void AssemblyRollIsNotAnEpicOrAHouseNumber()
     {
-        Assert.Equal("ABC1234567", VoterLookup.NormalizeEpic("abc 1234567"));
-        Assert.Equal("12A", VoterLookup.NormalizeHouse(" 12-a "));
+        Assert.Equal(VoterLookupMode.Epic, VoterLookup.Classify("ABC1234567"));
+        Assert.False(VoterLookup.IsAssemblyRoll("ABC1234567"));
+        Assert.False(VoterLookup.IsAssemblyRoll("ABC 1234567"));
+
+        Assert.Equal(VoterLookupMode.AssemblyRoll, VoterLookup.Classify("175 / 42 / 123"));
+        Assert.NotEqual(VoterLookupMode.KeyAndHouse, VoterLookup.Classify("175-42-123"));
+        Assert.Equal(VoterLookupMode.KeyAndHouse, VoterLookup.Classify("12-A"));
+        Assert.Equal(VoterLookupMode.KeyAndHouse, VoterLookup.Classify("12A"));
+        Assert.Equal(VoterLookupMode.KeyAndHouse, VoterLookup.Classify("A12"));
     }
 
     [Fact]
-    public void MatchesTeluguAndEnglishNames()
+    public void NormalizesEpicAssemblyRollAndHouse()
     {
-        Assert.True(VoterTextMatch.MatchesName("రామారావు", "Ramarao", "సీత", "Sita", "రామ"));
-        Assert.True(VoterTextMatch.MatchesName("రామారావు", "Ramarao", "సీత", "Sita", "sita"));
+        Assert.Equal("ABC1234567", VoterLookup.NormalizeEpic("abc 1234567"));
+        Assert.Equal("12A", VoterLookup.NormalizeHouse(" 12-a "));
+        Assert.Equal("175/42/123", VoterLookup.NormalizeAssemblyRoll("  175 / 42 / 123 "));
+        Assert.Equal("175/42/123", VoterLookup.NormalizeAssemblyRoll("175-42-123"));
+        Assert.Equal(
+            VoterLookup.NormalizeAssemblyRoll("175/42/123"),
+            VoterLookup.NormalizeAssemblyRoll("175 - 42 - 123"));
+    }
+
+    [Fact]
+    public void MatchesAssemblyRollAfterWhitespaceNormalization()
+    {
+        Assert.True(VoterTextMatch.MatchesAssemblyRoll("175/42/123", "175 / 42 / 123"));
+        Assert.True(VoterTextMatch.MatchesAssemblyRoll("175 - 42 - 123", "175/42/123"));
+        Assert.False(VoterTextMatch.MatchesAssemblyRoll("175/42/123", "ABC1234567"));
+        Assert.False(VoterTextMatch.MatchesAssemblyRoll("12-A", "12-A"));
+        Assert.False(VoterTextMatch.MatchesAssemblyRoll("175/42/124", "175/42/123"));
+    }
+
+    [Theory]
+    [InlineData("రామారావు", "", "", "", "రామ")]
+    [InlineData("", "Ramarao", "", "", "rama")]
+    [InlineData("", "", "సీత", "", "సీత")]
+    [InlineData("", "", "", "Sita Devi", "sita")]
+    public void MatchesEachNameField(string telugu, string english, string relativeTelugu, string relativeEnglish, string query)
+    {
+        Assert.True(VoterTextMatch.MatchesName(telugu, english, relativeTelugu, relativeEnglish, query));
+    }
+
+    [Fact]
+    public void RejectsADifferentName()
+    {
         Assert.False(VoterTextMatch.MatchesName("రామారావు", "Ramarao", "సీత", "Sita", "Lakshmi"));
+    }
+
+    [Fact]
+    public void HouseMatchKeepsExactValuesAndPrefixOnly()
+    {
+        Assert.True(VoterTextMatch.MatchesHouse("12-A", "12A", "12-A"));
+        Assert.True(VoterTextMatch.MatchesHouse("12", "12", "12"));
+        Assert.True(VoterTextMatch.MatchesHouse("12-A", "12A", "12"));
+        Assert.True(VoterTextMatch.MatchesHouse("12/1", "121", "12"));
+        Assert.False(VoterTextMatch.MatchesHouse("112", "112", "12"));
+        Assert.False(VoterTextMatch.MatchesHouse("13", "13", "12"));
+        Assert.True(VoterTextMatch.MatchesHouse("12-A", "", "12a"));
     }
 
     [Fact]
@@ -237,7 +291,32 @@ public class QueryBuilderTests
     {
         var filter = VoterQueryBuilder.House("10", "12'A", "12A");
         Assert.Contains("HouseNumber eq '12''A'", filter, StringComparison.Ordinal);
+        Assert.Contains("NormalizedHouseNumber ge '12A'", filter, StringComparison.Ordinal);
+        Assert.Contains("NormalizedHouseNumber lt '12B'", filter, StringComparison.Ordinal);
         Assert.Contains("PartitionKey eq '10'", filter, StringComparison.Ordinal);
+        Assert.DoesNotContain("substringof", filter, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void AssemblyRollFilterStaysInsideTheWardAndNotTheHouseColumn()
+    {
+        var filter = VoterQueryBuilder.AssemblyRoll("10", "175/42/123");
+        Assert.Contains("PartitionKey eq '10'", filter, StringComparison.Ordinal);
+        Assert.Contains("AssemblyRollReference eq '175/42/123'", filter, StringComparison.Ordinal);
+        Assert.Contains("AssemblyRollReference eq '175-42-123'", filter, StringComparison.Ordinal);
+        Assert.Contains("AssemblyRollReference eq '175 / 42 / 123'", filter, StringComparison.Ordinal);
+        Assert.Contains("AssemblyRollReference eq '175 - 42 - 123'", filter, StringComparison.Ordinal);
+        Assert.DoesNotContain("HouseNumber", filter, StringComparison.Ordinal);
+        Assert.DoesNotContain("EpicNumber", filter, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShortHousePrefixUsesTheNextCharacterAsTheUpperBound()
+    {
+        var filter = VoterQueryBuilder.House("10", "9", "9");
+        Assert.Contains("NormalizedHouseNumber ge '9'", filter, StringComparison.Ordinal);
+        Assert.Contains("NormalizedHouseNumber lt ':'", filter, StringComparison.Ordinal);
+        Assert.Contains("HouseNumber eq '9'", filter, StringComparison.Ordinal);
     }
 }
 
@@ -269,5 +348,9 @@ public class ConfigurationDriftTests
         Assert.Contains("_verifications.AddEntityAsync", source, StringComparison.Ordinal);
         Assert.Contains("_verifications.UpdateEntityAsync", source, StringComparison.Ordinal);
         Assert.Contains("TableUpdateMode.Replace", source, StringComparison.Ordinal);
+        Assert.Contains("VoterLookupMode.AssemblyRoll", source, StringComparison.Ordinal);
+        Assert.Contains("VoterQueryBuilder.AssemblyRoll", source, StringComparison.Ordinal);
+        Assert.Contains("MatchesHouse", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("substringof", source, StringComparison.OrdinalIgnoreCase);
     }
 }

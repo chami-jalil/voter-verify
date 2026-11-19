@@ -26,7 +26,7 @@ Screens, in order:
 1. Login — Microsoft Entra ID sign-in.
 2. Ward selection — Ward 10, plus a second ward that stays unavailable until it is configured.
 3. Dashboard — expected roll size, voters on file, and verified count.
-4. Voter search — serial number, EPIC, Telugu or English name, or house number.
+4. Voter search — serial number, EPIC, assembly roll reference, Telugu or English name, or house number.
 5. Voter details and verification — roll fields are read-only; phone and verified state are saved separately.
 
 ## Azure values you must supply
@@ -117,7 +117,9 @@ az storage table create --account-name <account> --name VoterVerifications --aut
 | VerifiedBy | Signed-in user's name and username |
 | UpdatedAtUtc | Last save time |
 
-House search compares the typed value with `NormalizedHouseNumber` after removing spaces and hyphens and uppercasing it. Import the voter list with that same normalization.
+House search still removes spaces and hyphens and uppercases the typed value. An exact printed house number is included. A partial match is a prefix of `NormalizedHouseNumber`, written as a string range (`ge` / `lt`) inside the ward partition. Azure Table Storage has no `contains` or `startswith`, and `NormalizedHouseNumber` is not a table key, so this range still scans that partition and only avoids downloading rows outside the prefix. A house such as `112` does not match a search for `12`. Import `NormalizedHouseNumber` with the same letter-and-digit normalization.
+
+Assembly roll search is separate from EPIC and from house number. A value of three or more numeric parts, such as `175/42/123`, is matched with an equality filter on `AssemblyRollReference` in the same ward. Spaces are removed and `-` is treated as `/`. The query also checks the hyphen form and a single space around the separators, for example `175-42-123` and `175 / 42 / 123`. Other stored spacing is not matched.
 
 ## Run locally
 

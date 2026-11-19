@@ -8,7 +8,7 @@
              Title="Search">
     <Grid RowDefinitions="Auto,*" Padding="20,12" RowSpacing="12">
         <VerticalStackLayout Grid.Row="0" Spacing="10">
-            <Label Text="Serial number, EPIC, name, or house number. Names can be Telugu or English."
+            <Label Text="Serial number, EPIC, assembly roll, name, or house number. Names can be Telugu or English."
                    Style="{StaticResource Muted}" />
             <Border Stroke="{AppThemeBinding Light={StaticResource Line}, Dark={StaticResource LineDark}}"
                     StrokeShape="RoundRectangle 12"
