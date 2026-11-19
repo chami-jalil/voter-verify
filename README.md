@@ -121,6 +121,10 @@ House search still removes spaces and hyphens and uppercases the typed value. An
 
 Assembly roll search is separate from EPIC and from house number. A value of three or more numeric parts, such as `175/42/123`, is matched with an equality filter on `AssemblyRollReference` in the same ward. Spaces are removed and `-` is treated as `/`. The query also checks the hyphen form and a single space around the separators, for example `175-42-123` and `175 / 42 / 123`. Other stored spacing is not matched.
 
+## Ward data import
+
+The mobile app only reads `Voters`. A separate console tool, `tools/VoterDataImporter`, validates a CSV and inserts new rows. It does not write `VoterVerifications`, delete rows, or overwrite an existing voter. Real voter rolls, PDFs, and credentials stay out of this repository. The CSV format, sign-in, dry run, import, and verification steps are in `tools/VoterDataImporter/README.md`.
+
 ## Run locally
 
 Install the .NET 10 SDK, the MAUI Android workload, and an Android SDK (API 36) with JDK 17:

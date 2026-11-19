@@ -9,3 +9,6 @@ obj/
 
 # OS-generated files
 .DS_Store
+
+# Local voter extracts. Real rolls, PDFs, and exports stay out of git.
+/imports/

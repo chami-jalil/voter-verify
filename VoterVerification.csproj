@@ -40,10 +40,15 @@
 
 	<ItemGroup>
 		<Compile Remove="tests/**" />
+		<Compile Remove="tools/**" />
 		<Compile Remove="bin/**" />
 		<Compile Remove="obj/**" />
 		<None Remove="tests/**" />
+		<None Remove="tools/**" />
+		<Content Remove="tools/**" />
+		<EmbeddedResource Remove="tools/**" />
 		<MauiXaml Remove="tests/**" />
+		<MauiXaml Remove="tools/**" />
 	</ItemGroup>
 
 	<ItemGroup>

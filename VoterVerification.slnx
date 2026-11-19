@@ -1,4 +1,6 @@
 <Solution>
   <Project Path="VoterVerification.csproj" />
   <Project Path="tests/VoterVerification.Tests/VoterVerification.Tests.csproj" />
+  <Project Path="tools/VoterDataImporter/VoterDataImporter.csproj" />
+  <Project Path="tools/VoterDataImporter.Tests/VoterDataImporter.Tests.csproj" />
 </Solution>
