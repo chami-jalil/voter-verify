@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="VoterVerification.csproj" />
+  <Project Path="tests/VoterVerification.Tests/VoterVerification.Tests.csproj" />
+</Solution>

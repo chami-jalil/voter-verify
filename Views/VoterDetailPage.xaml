@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewModels="clr-namespace:VoterVerification.ViewModels"
+             x:Class="VoterVerification.Views.VoterDetailPage"
+             x:DataType="viewModels:VoterDetailViewModel"
+             Title="{Binding Title}">
+    <ScrollView>
+        <VerticalStackLayout Padding="20,16" Spacing="14">
+            <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+
+            <Border Style="{StaticResource ErrorBanner}" IsVisible="{Binding HasError}">
+                <Label Text="{Binding ErrorMessage}" Style="{StaticResource Body}" TextColor="{StaticResource Danger}" />
+            </Border>
+
+            <Border Style="{StaticResource SuccessBanner}" IsVisible="{Binding HasSuccess}">
+                <Label Text="{Binding SuccessMessage}" Style="{StaticResource Body}" />
+            </Border>
+
+            <Label Text="This voter is not in the ward list."
+                   Style="{StaticResource Body}"
+                   IsVisible="{Binding NotFound}" />
+
+            <VerticalStackLayout Spacing="14" IsVisible="{Binding IsLoaded}">
+                <Border Style="{StaticResource Card}">
+                    <VerticalStackLayout Spacing="12">
+                        <Label Text="Electoral roll" Style="{StaticResource SectionLabel}" />
+                        <Label Text="Name (తెలుగు)" Style="{StaticResource FieldCaption}" />
+                        <Label Text="{Binding NameTelugu}" Style="{StaticResource TeluguValue}" />
+                        <Label Text="Name (English)" Style="{StaticResource FieldCaption}" />
+                        <Label Text="{Binding NameEnglish}" Style="{StaticResource FieldValue}" />
+                        <Label Text="Relative (తెలుగు)" Style="{StaticResource FieldCaption}" />
+                        <Label Text="{Binding RelativeTelugu}" Style="{StaticResource TeluguValue}" FontSize="18" />
+                        <Label Text="Relative (English)" Style="{StaticResource FieldCaption}" />
+                        <Label Text="{Binding RelativeEnglish}" Style="{StaticResource FieldValue}" />
+
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
+                            <VerticalStackLayout Grid.Row="0" Grid.Column="0" Spacing="2">
+                                <Label Text="EPIC" Style="{StaticResource FieldCaption}" />
+                                <Label Text="{Binding EpicNumber}" Style="{StaticResource FieldValue}" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Row="0" Grid.Column="1" Spacing="2">
+                                <Label Text="House" Style="{StaticResource FieldCaption}" />
+                                <Label Text="{Binding HouseNumber}" Style="{StaticResource FieldValue}" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Row="1" Grid.Column="0" Spacing="2">
+                                <Label Text="Age" Style="{StaticResource FieldCaption}" />
+                                <Label Text="{Binding Age}" Style="{StaticResource FieldValue}" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Row="1" Grid.Column="1" Spacing="2">
+                                <Label Text="Gender" Style="{StaticResource FieldCaption}" />
+                                <Label Text="{Binding Gender}" Style="{StaticResource FieldValue}" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Row="2" Grid.Column="0" Spacing="2">
+                                <Label Text="Section" Style="{StaticResource FieldCaption}" />
+                                <Label Text="{Binding SectionNumber}" Style="{StaticResource FieldValue}" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Row="2" Grid.Column="1" Spacing="2">
+                                <Label Text="Assembly roll" Style="{StaticResource FieldCaption}" />
+                                <Label Text="{Binding AssemblyRoll}" Style="{StaticResource FieldValue}" />
+                            </VerticalStackLayout>
+                        </Grid>
+                    </VerticalStackLayout>
+                </Border>
+
+                <Border Style="{StaticResource Card}">
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="Verification" Style="{StaticResource SectionLabel}" />
+                        <Label Text="This is stored separately from the voter list." Style="{StaticResource Muted}" />
+                        <Label Text="Phone number" Style="{StaticResource FieldCaption}" />
+                        <Border Stroke="{AppThemeBinding Light={StaticResource Line}, Dark={StaticResource LineDark}}"
+                                StrokeShape="RoundRectangle 12"
+                                StrokeThickness="1"
+                                Padding="12,2"
+                                BackgroundColor="{AppThemeBinding Light={StaticResource Paper}, Dark={StaticResource PaperDark}}">
+                            <Entry Text="{Binding PhoneNumber}"
+                                   Placeholder="10-digit number"
+                                   Keyboard="Telephone"
+                                   MaxLength="16"
+                                   IsSpellCheckEnabled="False"
+                                   IsTextPredictionEnabled="False" />
+                        </Border>
+                        <Label Text="{Binding PhoneError}" TextColor="{StaticResource Danger}" IsVisible="{Binding HasPhoneError}" />
+
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Text="Mark as verified" Style="{StaticResource Body}" VerticalOptions="Center" />
+                            <Switch Grid.Column="1" IsToggled="{Binding IsVerified}" />
+                        </Grid>
+
+                        <Label Text="{Binding RecordedBy, StringFormat='Recorded by {0}'}"
+                               Style="{StaticResource Muted}"
+                               IsVisible="{Binding HasRecordedBy}" />
+                        <Label Text="{Binding VerifiedAt, StringFormat='Verified at {0}'}"
+                               Style="{StaticResource Muted}"
+                               IsVisible="{Binding HasVerifiedAt}" />
+                        <Label Text="{Binding UpdatedAt, StringFormat='Updated {0}'}"
+                               Style="{StaticResource Muted}"
+                               IsVisible="{Binding HasUpdatedAt}" />
+
+                        <Button Text="Save verification" Command="{Binding SaveCommand}" />
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
