@@ -26,7 +26,9 @@ public static class MauiProgram
 
         builder.Services.AddSingleton<SecureMsalTokenCache>();
         builder.Services.AddSingleton<IEntraAuthService, EntraAuthService>();
-        builder.Services.AddSingleton<IVoterDataService, AzureTableVoterDataService>();
+        builder.Services.AddSingleton<ActiveWardContext>();
+        builder.Services.AddHttpClient(nameof(FunctionsVoterDataService));
+        builder.Services.AddSingleton<IVoterDataService, FunctionsVoterDataService>();
         builder.Services.AddSingleton<IConnectivityService, MauiConnectivityService>();
         builder.Services.AddSingleton<IConfirmationDialog, MauiConfirmationDialog>();
         builder.Services.AddSingleton<ISessionCoordinator, SessionCoordinator>();

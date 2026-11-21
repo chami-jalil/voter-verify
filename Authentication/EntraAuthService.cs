@@ -43,7 +43,7 @@ public sealed class EntraAuthService : IEntraAuthService
             try
             {
                 var result = await client
-                    .AcquireTokenSilent(AppConfiguration.StorageScopes, account)
+                    .AcquireTokenSilent(AppConfiguration.ApiScopes, account)
                     .ExecuteAsync(cancellationToken);
                 _currentUser = ToUser(result);
                 return _currentUser;
@@ -78,7 +78,7 @@ public sealed class EntraAuthService : IEntraAuthService
             try
             {
                 var result = await client
-                    .AcquireTokenInteractive(AppConfiguration.StorageScopes)
+                    .AcquireTokenInteractive(AppConfiguration.ApiScopes)
                     .WithParentActivityOrWindow(() => ParentActivity())
                     .WithPrompt(Prompt.SelectAccount)
                     .ExecuteAsync(cancellationToken);
@@ -157,6 +157,9 @@ public sealed class EntraAuthService : IEntraAuthService
             _gate.Release();
         }
     }
+
+    public Task<AccessToken> GetApiTokenAsync(CancellationToken cancellationToken) =>
+        GetStorageTokenAsync(AppConfiguration.ApiScopes, cancellationToken);
 
     private async Task<IPublicClientApplication> GetClientAsync()
     {

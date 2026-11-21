@@ -15,6 +15,9 @@ public sealed class VoterTableEntity : ITableEntity
 
     public string WardId { get; set; } = "";
 
+    /// <summary>Customer account id. Blank on rows imported before tenant keys existed.</summary>
+    public string TenantId { get; set; } = "";
+
     public string WardVoterSerialNumber { get; set; } = "";
 
     public string EpicNumber { get; set; } = "";

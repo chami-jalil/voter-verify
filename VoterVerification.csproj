@@ -41,14 +41,19 @@
 	<ItemGroup>
 		<Compile Remove="tests/**" />
 		<Compile Remove="tools/**" />
+		<Compile Remove="api/**" />
 		<Compile Remove="bin/**" />
 		<Compile Remove="obj/**" />
 		<None Remove="tests/**" />
 		<None Remove="tools/**" />
+		<None Remove="api/**" />
 		<Content Remove="tools/**" />
+		<Content Remove="api/**" />
 		<EmbeddedResource Remove="tools/**" />
+		<EmbeddedResource Remove="api/**" />
 		<MauiXaml Remove="tests/**" />
 		<MauiXaml Remove="tools/**" />
+		<MauiXaml Remove="api/**" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -59,6 +64,7 @@
 
 	<ItemGroup>
 		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
+		<PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
 		<PackageReference Include="Azure.Data.Tables" Version="12.13.0" />

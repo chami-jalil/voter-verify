@@ -8,13 +8,19 @@ namespace VoterVerification.Configuration;
 public static class AppConfiguration
 {
     /// <summary>Entra ID directory (tenant) id.</summary>
-    public const string TenantId = "";
+    public const string TenantId = "189c732a-0bd5-47d5-a3f5-0d67115edc97";
 
     /// <summary>Application (client) id of the public mobile registration.</summary>
-    public const string ClientId = "";
+    public const string ClientId = "0d3ddae7-65fa-4914-ace4-cb9659d21ccd";
 
-    /// <summary>Storage account name. The app uses the public table endpoint only.</summary>
+    /// <summary>Storage account name. The mobile app does not use this. The Function App reads the account name from its own setting.</summary>
     public const string StorageAccountName = "";
+
+    /// <summary>HTTPS base URL of the Azure Functions app, with no function key.</summary>
+    public const string FunctionsBaseUrl = "https://voter-verification-api-ajg6g7bme2gdfv6.southindia-01.azurewebsites.net/";
+
+    /// <summary>Delegated scope of the Functions API, such as api://{api-client-id}/access_as_user.</summary>
+    public const string ApiScope = "api://7a4a2c30-ff23-47c3-b599-15b3e6a71085/access_as_user";
 
     public const string VotersTableName = "Voters";
 
@@ -37,6 +43,9 @@ public static class AppConfiguration
 
     public static readonly string[] StorageScopes = ["https://storage.azure.com/.default"];
 
+    public static string[] ApiScopes =>
+        string.IsNullOrWhiteSpace(ApiScope) ? [] : [ApiScope];
+
     public static string TableServiceUri =>
         $"https://{StorageAccountName}.table.core.windows.net";
 
@@ -56,9 +65,15 @@ public static class AppConfiguration
             missing.Add(nameof(ClientId));
         }
 
-        if (string.IsNullOrWhiteSpace(StorageAccountName))
+        if (!Uri.TryCreate(FunctionsBaseUrl, UriKind.Absolute, out var functionsUri)
+            || functionsUri.Scheme != Uri.UriSchemeHttps)
         {
-            missing.Add(nameof(StorageAccountName));
+            missing.Add(nameof(FunctionsBaseUrl));
+        }
+
+        if (string.IsNullOrWhiteSpace(ApiScope) || !ApiScope.StartsWith("api://", StringComparison.Ordinal))
+        {
+            missing.Add(nameof(ApiScope));
         }
 
         return missing;

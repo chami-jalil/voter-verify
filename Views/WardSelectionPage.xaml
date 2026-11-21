@@ -10,6 +10,7 @@
         <VerticalStackLayout Padding="20,16" Spacing="14">
             <Label Text="Choose a ward" Style="{StaticResource PageTitle}" />
             <Label Text="{Binding SignedInAs}" Style="{StaticResource Muted}" />
+            <Label Text="{Binding EmptyMessage}" Style="{StaticResource Muted}" />
 
             <VerticalStackLayout BindableLayout.ItemsSource="{Binding Wards}" Spacing="12">
                 <BindableLayout.ItemTemplate>

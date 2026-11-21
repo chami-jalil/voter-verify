@@ -13,6 +13,10 @@ public sealed class VoterVerificationTableEntity : ITableEntity
 
     public ETag ETag { get; set; }
 
+    public string WardId { get; set; } = "";
+
+    public string TenantId { get; set; } = "";
+
     public string PhoneNumber { get; set; } = "";
 
     public bool IsVerified { get; set; }

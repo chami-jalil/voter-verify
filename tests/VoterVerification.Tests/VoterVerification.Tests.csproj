@@ -24,6 +24,7 @@
     <Compile Include="$(RepoRoot)/Configuration/AppConfiguration.cs" Link="Linked/AppConfiguration.cs" />
     <Compile Include="$(RepoRoot)/Configuration/WardCatalog.cs" Link="Linked/WardCatalog.cs" />
     <Compile Include="$(RepoRoot)/Models/*.cs" Link="Linked/Models/%(Filename)%(Extension)" />
+    <Compile Include="$(RepoRoot)/Data/*.cs" Link="Linked/Data/%(Filename)%(Extension)" />
     <Compile Include="$(RepoRoot)/Helpers/*.cs" Link="Linked/Helpers/%(Filename)%(Extension)" />
     <Compile Include="$(RepoRoot)/Services/AppException.cs" Link="Linked/AppException.cs" />
     <Compile Include="$(RepoRoot)/Services/ErrorMapper.cs" Link="Linked/ErrorMapper.cs" />
@@ -31,6 +32,7 @@
 
   <ItemGroup>
     <None Include="$(RepoRoot)/Services/AzureTableVoterDataService.cs" Link="sources/AzureTableVoterDataService.cs" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="$(RepoRoot)/Helpers/VoterPartitionSearch.cs" Link="sources/VoterPartitionSearch.cs" CopyToOutputDirectory="PreserveNewest" />
     <None Include="$(RepoRoot)/Platforms/Android/AndroidManifest.xml" Link="sources/AndroidManifest.xml" CopyToOutputDirectory="PreserveNewest" />
     <None Include="$(RepoRoot)/VoterVerification.csproj" Link="sources/VoterVerification.csproj" CopyToOutputDirectory="PreserveNewest" />
     <None Include="$(RepoRoot)/Configuration/AppConfiguration.cs" Link="sources/AppConfiguration.cs" CopyToOutputDirectory="PreserveNewest" />

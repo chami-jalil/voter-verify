@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Data.Tables" Version="12.13.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.14.0" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\VoterVerification.Functions\Security\AccessModels.cs" Link="Security\AccessModels.cs" />
+    <Compile Include="..\VoterVerification.Functions\Security\AccessPolicy.cs" Link="Security\AccessPolicy.cs" />
+    <Compile Include="..\VoterVerification.Functions\Security\EntraJwt.cs" Link="Security\EntraJwt.cs" />
+    <Compile Include="..\VoterVerification.Functions\Security\FunctionSettings.cs" Link="Security\FunctionSettings.cs" />
+    <Compile Include="..\..\Helpers\TableKeyRules.cs" Link="Linked\TableKeyRules.cs" />
+    <Compile Include="..\..\Helpers\TenantPartitions.cs" Link="Linked\TenantPartitions.cs" />
+    <Compile Include="..\..\Data\VoterTableEntity.cs" Link="Linked\VoterTableEntity.cs" />
+  </ItemGroup>
+
+</Project>

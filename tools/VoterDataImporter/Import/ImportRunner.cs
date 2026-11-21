@@ -1,6 +1,7 @@
 using System.Text;
 using VoterDataImporter.Validation;
 using VoterVerification.Configuration;
+using VoterVerification.Helpers;
 
 namespace VoterDataImporter.Import;
 
@@ -13,6 +14,10 @@ public sealed class ImportRequest
     public bool Write { get; init; }
 
     public string AccountLabel { get; init; } = "";
+
+    public string TenantId { get; init; } = "";
+
+    public bool LegacyPartition { get; init; }
 }
 
 public sealed class ImportRunResult
@@ -50,6 +55,27 @@ public static class ImportRunner
         {
             text.AppendLine("Invalid rows were not imported.");
             return Finish(report, null, null, false, false, 1, text);
+        }
+
+        var hasTenant = !string.IsNullOrWhiteSpace(request.TenantId);
+        if (hasTenant == request.LegacyPartition)
+        {
+            text.AppendLine("Pass exactly one of --tenant or --legacy-partition. Nothing was written.");
+            return Finish(report, null, null, false, false, 2, text);
+        }
+
+        if (hasTenant)
+        {
+            if (!TenantPartitions.IsCustomerTenantId(request.TenantId))
+            {
+                text.AppendLine("The customer tenant id cannot be used in a table key. Nothing was written.");
+                return Finish(report, null, null, false, false, 2, text);
+            }
+
+            foreach (var entity in report.ValidEntities)
+            {
+                TenantPartitions.ApplyCustomerTenant(entity, request.TenantId);
+            }
         }
 
         if (request.Write && store is null)

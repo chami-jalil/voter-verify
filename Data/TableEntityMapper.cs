@@ -45,7 +45,7 @@ public static class TableEntityMapper
     public static VoterVerificationRecord ToRecord(VoterVerificationTableEntity entity) =>
         new()
         {
-            WardId = entity.PartitionKey,
+            WardId = string.IsNullOrWhiteSpace(entity.WardId) ? entity.PartitionKey : entity.WardId,
             WardVoterSerialNumber = entity.RowKey,
             PhoneNumber = entity.PhoneNumber ?? "",
             IsVerified = entity.IsVerified,

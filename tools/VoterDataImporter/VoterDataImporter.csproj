@@ -17,6 +17,7 @@
     <Compile Include="$(RepoRoot)/Configuration/AppConfiguration.cs" Link="Linked/AppConfiguration.cs" />
     <Compile Include="$(RepoRoot)/Data/VoterTableEntity.cs" Link="Linked/VoterTableEntity.cs" />
     <Compile Include="$(RepoRoot)/Helpers/TableKeyRules.cs" Link="Linked/TableKeyRules.cs" />
+    <Compile Include="$(RepoRoot)/Helpers/TenantPartitions.cs" Link="Linked/TenantPartitions.cs" />
     <Compile Include="$(RepoRoot)/Helpers/VoterLookup.cs" Link="Linked/VoterLookup.cs" />
     <Compile Include="$(RepoRoot)/Helpers/VoterTextMatch.cs" Link="Linked/VoterTextMatch.cs" />
   </ItemGroup>

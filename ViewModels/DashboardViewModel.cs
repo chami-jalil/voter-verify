@@ -12,12 +12,14 @@ public partial class DashboardViewModel : ViewModelBase, IQueryAttributable
     private readonly IVoterDataService _data;
     private readonly ISessionCoordinator _session;
     private readonly IEntraAuthService _auth;
+    private readonly ActiveWardContext _wardContext;
     private string? _requestedWardId;
 
     public DashboardViewModel(
         IVoterDataService data,
         ISessionCoordinator session,
         IEntraAuthService auth,
+        ActiveWardContext wardContext,
         IConnectivityService connectivity,
         ILogger<DashboardViewModel> logger)
         : base(connectivity, logger)
@@ -25,6 +27,7 @@ public partial class DashboardViewModel : ViewModelBase, IQueryAttributable
         _data = data;
         _session = session;
         _auth = auth;
+        _wardContext = wardContext;
     }
 
     [ObservableProperty]
@@ -60,15 +63,18 @@ public partial class DashboardViewModel : ViewModelBase, IQueryAttributable
     [RelayCommand]
     private Task LoadAsync()
     {
-        var ward = WardCatalog.Find(WardId);
-        if (ward is null || !ward.IsConfigured)
+        if (string.IsNullOrEmpty(WardId))
         {
-            ErrorMessage = "This ward is not configured on this device.";
+            ErrorMessage = "This ward is not available.";
             return Task.CompletedTask;
         }
 
-        Title = ward.DisplayName;
-        ExpectedVoters = ward.ExpectedVoters?.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) ?? "—";
+        var selected = _wardContext.Current;
+        var ward = selected is not null && string.Equals(selected.WardId, WardId, StringComparison.Ordinal)
+            ? selected
+            : WardCatalog.Find(WardId);
+        Title = ward is { IsConfigured: true, DisplayName.Length: > 0 } ? ward.DisplayName : $"Ward {WardId}";
+        ExpectedVoters = ward?.ExpectedVoters?.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) ?? "—";
         SignedInAs = _auth.CurrentUser is { Username.Length: > 0 } user
             ? $"Signed in as {user.Username}"
             : "Signed in";
@@ -77,7 +83,12 @@ public partial class DashboardViewModel : ViewModelBase, IQueryAttributable
 
         return ExecuteAsync(async cancellationToken =>
         {
-            var stats = await _data.GetDashboardStatsAsync(ward.WardId, cancellationToken);
+            var stats = await _data.GetDashboardStatsAsync(WardId, cancellationToken);
+            if (stats.ExpectedVoters is int expected)
+            {
+                ExpectedVoters = expected.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
+            }
+
             VotersOnFile = stats.VotersOnFile.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
             VerifiedCount = stats.VerifiedCount.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
         });

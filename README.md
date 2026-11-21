@@ -1,83 +1,62 @@
 # Voter Verification
 
-Temporary internal Android app for authorized staff to look up ward voter-list records and record an administrative verification. The app talks to Azure Table Storage directly over HTTPS. It does not include a web API, SQL database, or Firebase.
+Android app for authorized staff to look up ward voter-list records and record an administrative verification. The phone signs in with Microsoft Entra ID and calls an Azure Functions API. The Function App reads and writes Azure Table Storage with its own managed identity. The APK does not contain a storage key, SAS token, function key, or client secret.
 
-Voter master rows are read-only. Verification is stored in a separate table and updated with the row ETag so a later save cannot silently overwrite someone else's change.
+Voter master rows are read-only. Verification is stored in a separate table and updated with the row ETag so a later save cannot silently overwrite someone else's change. Customer, ward, and role checks run in the API. The phone cannot grant itself another customer or ward by sending a different id.
 
 ## Solution structure
 
 ```
-VoterVerification.sln
+VoterVerification.slnx
 VoterVerification.csproj          .NET MAUI Android app
-Configuration/                    Entra IDs, storage account, ward settings
-Authentication/                   MSAL sign-in and Table Storage token credential
+api/VoterVerification.Functions/  .NET 10 isolated Azure Functions API
+Configuration/                    Entra IDs, Functions URL, API scope
+Authentication/                   MSAL public-client sign-in
 Models/                           Voter, verification, ward, and search models
 Data/                             Azure Table entities and mapping
-Services/                         IVoterDataService and the table implementation
-Helpers/                          Search, phone, ETag, and OData rules
+Services/                         HTTP client used by the app
+Helpers/                          Search, phone, ETag, tenant partitions, and OData rules
 ViewModels/                       Screen state and commands
 Views/                            Login, wards, dashboard, search, voter detail
 Platforms/Android/                Manifest, MSAL redirect, activity
+tools/VoterDataImporter/          Administrative CSV import
 tests/VoterVerification.Tests/    Rules that do not need a device
 ```
 
 Screens, in order:
 
 1. Login — Microsoft Entra ID sign-in.
-2. Ward selection — Ward 10, plus a second ward that stays unavailable until it is configured.
+2. Ward selection — only the wards the API assigns to the signed-in account.
 3. Dashboard — expected roll size, voters on file, and verified count.
 4. Voter search — serial number, EPIC, assembly roll reference, Telugu or English name, or house number.
 5. Voter details and verification — roll fields are read-only; phone and verified state are saved separately.
 
 ## Azure values you must supply
 
-Set these constants in `Configuration/AppConfiguration.cs` and rebuild. Do not put a storage account key, client secret, or SAS token in the app.
+Set these constants in `Configuration/AppConfiguration.cs` and rebuild. Do not put a storage account key, client secret, function key, or SAS token in the app.
 
 | Constant | What to enter |
 | --- | --- |
-| `TenantId` | Entra ID directory (tenant) id |
-| `ClientId` | Application (client) id of the mobile app registration |
-| `StorageAccountName` | Storage account name only, for `https://{name}.table.core.windows.net` |
-| `Ward2Id` | Partition key for the second ward |
-| `Ward2DisplayName` | Name shown for the second ward |
-| `Ward2ExpectedVoters` | Expected voter count for the second ward |
+| `TenantId` | Entra ID directory (tenant) id of the organization that signs the user in |
+| `ClientId` | Application (client) id of the public mobile app registration |
+| `FunctionsBaseUrl` | HTTPS base URL of the Function App, with no code or key in the query string |
+| `ApiScope` | Delegated scope `api://{functions-api-client-id}/access_as_user` |
 
-Ward 10 is fixed: partition key `10`, display name `Ward 10`, expected voters `7,125`. Leave the Ward 2 constants blank until the real name, id, and count are known. The app will not invent them.
+`StorageAccountName` in this file is not used by the phone. The Function App reads the account name from its own setting. The existing storage account is `voterlistdatastg` in resource group `voter-list-rg` (South India).
+
+Ward 10's existing rows stay on partition key `10`. Expected voters for that initial ward remain `7,125` when the Function App's `InitialTenantId` matches the caller. Other wards come from the API, not from constants in the APK.
 
 The Android redirect scheme is generated from `ClientId` at build time (`msal{client-id}://auth`). You do not edit the manifest by hand.
 
 `VotersTableName` and `VerificationsTableName` default to `Voters` and `VoterVerifications`.
 
-## Entra ID app registration
+## Entra ID and Azure
 
-Create a public client registration. Do not create a client secret.
+The phone is a public client. The Function App is the protected API and uses a system-assigned managed identity for table data. Exact registration steps, supported account types, the API scope, admin consent, bootstrap SuperAdmin object id, and the role assignment are in `api/VoterVerification.Functions/README.md`.
 
-- Platform: Mobile and desktop applications.
-- Redirect URI: `msal{client-id}://auth`.
-- Allow public client flows.
-- Delegated API permission: **Azure Storage** → `user_impersonation`.
-- Grant admin consent for that permission.
+The app requests `ApiScope`, not `https://storage.azure.com/.default`. The signed-in user's display name and username are stored in `VerifiedBy` on a verification row. Passwords and access tokens are not written to application preferences. The MSAL cache is kept in MAUI SecureStorage, which uses the Android Keystore.
 
-The app requests scope `https://storage.azure.com/.default`. The signed-in user's display name and username are stored in `VerifiedBy`. Passwords and access tokens are not written to application preferences. The MSAL cache is kept in MAUI SecureStorage, which uses the Android Keystore.
-
-## Data permissions
-
-Assign a **data** role on the storage account, or on the two tables. Do not assign Owner, Contributor, Storage Account Contributor, or any subscription-wide management role. Those roles do not grant table data access, and this app does not need them.
-
-The app reads `Voters` and inserts or replaces rows in `VoterVerifications`. It does not delete rows and it does not create tables.
-
-Built-in role that works, and still includes delete:
-
-- **Storage Table Data Contributor** (`0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3`), scoped to this storage account.
-
-Tighter custom role, without delete:
-
-- `Microsoft.Storage/storageAccounts/tableServices/tables/entities/read`
-- `Microsoft.Storage/storageAccounts/tableServices/tables/entities/write`
-
-`entities/write` covers insert and conditional replace. Scope read to the `Voters` table and read/write to the `VoterVerifications` table when a per-table assignment is practical.
-
-Role changes can take several minutes to apply.
+Signing in does not grant access. The API accepts the token only after it checks the issuer, audience, signature, and lifetime, then looks up an active application user. A SuperAdmin is the Entra object id configured on the Function App. A role sent by the phone is ignored.
 
 ## Tables
 
@@ -92,9 +71,10 @@ az storage table create --account-name <account> --name VoterVerifications --aut
 
 | Property | Contents |
 | --- | --- |
-| PartitionKey | Ward id |
+| PartitionKey | Ward id for existing rows. New customer rows use `{TenantId}\|{WardId}` |
 | RowKey | Ward voter serial number, kept as a string |
-| WardId, WardVoterSerialNumber | Same values as the keys |
+| TenantId | Customer account. Blank on existing ward rows |
+| WardId, WardVoterSerialNumber | Ward id and serial. Ward id is not taken from a composite partition key |
 | EpicNumber | EPIC |
 | AssemblyRollReference | Assembly roll reference |
 | NameTelugu, NameEnglish | Voter name |
@@ -109,8 +89,9 @@ az storage table create --account-name <account> --name VoterVerifications --aut
 
 | Property | Contents |
 | --- | --- |
-| PartitionKey | Ward id |
+| PartitionKey | Same partition as the voter row that was read |
 | RowKey | Same serial number as the voter row |
+| TenantId, WardId | Customer and ward resolved by the API |
 | PhoneNumber | 10 digits, or blank when not verified |
 | IsVerified | Boolean |
 | VerifiedAtUtc | Set when the row is verified |
@@ -150,7 +131,7 @@ Telugu names use the bundled Noto Sans Telugu font (SIL Open Font License, see `
 
 ## Behavior notes
 
-- Sign-in is disabled until tenant id, client id, and storage account name are set.
+- Sign-in is disabled until the Entra directory id, mobile client id, Functions HTTPS URL, and `api://` scope are set.
 - If the device has no network, actions stop before calling Azure.
 - Azure errors are shown as short messages. Storage account names and phone numbers are not written to logs.
 - A failed ETag check reloads the verification and asks the operator to review it before saving again.

@@ -28,8 +28,11 @@ try
                 ? AppConfiguration.Ward10ExpectedVoters
                 : throw new InvalidOperationException("Pass --expected for a ward other than Ward 10."));
         var wardStore = CreateStore(account);
-        var stored = await wardStore.ReadPartitionAsync(options.WardId, CancellationToken.None);
-        var check = WardVerifier.Check(stored, options.WardId, expected);
+        var partition = options.LegacyPartition
+            ? options.WardId
+            : TenantPartitions.For(options.TenantId, options.WardId);
+        var stored = await wardStore.ReadPartitionAsync(partition, CancellationToken.None);
+        var check = WardVerifier.Check(stored, options.WardId, expected, options.LegacyPartition ? null : options.TenantId);
         Console.WriteLine(check.Format());
         return check.IsSuccessful ? 0 : 1;
     }
@@ -54,7 +57,9 @@ try
             CsvText = csv,
             WardId = options.WardId,
             Write = options.Import,
-            AccountLabel = accountLabel
+            AccountLabel = accountLabel,
+            TenantId = options.TenantId,
+            LegacyPartition = options.LegacyPartition
         },
         store,
         confirm: message =>
@@ -126,14 +131,16 @@ public sealed class ImporterOptions
         """
         Voter data importer for the Voters table.
 
-          dotnet run --project tools/VoterDataImporter -- --csv <file>
-          dotnet run --project tools/VoterDataImporter -- --csv <file> --account <name>
-          dotnet run --project tools/VoterDataImporter -- --import --csv <file> --account <name>
-          dotnet run --project tools/VoterDataImporter -- --verify --account <name>
+          dotnet run --project tools/VoterDataImporter -- --csv <file> --legacy-partition
+          dotnet run --project tools/VoterDataImporter -- --csv <file> --account <name> --tenant <customer>
+          dotnet run --project tools/VoterDataImporter -- --import --csv <file> --account <name> --legacy-partition
+          dotnet run --project tools/VoterDataImporter -- --import --csv <file> --account <name> --tenant <customer>
+          dotnet run --project tools/VoterDataImporter -- --verify --account <name> --legacy-partition
 
         The default is a dry run and does not write. --import asks you to type IMPORT
-        before inserting. Authentication uses DefaultAzureCredential (sign in with
-        Azure CLI). Do not pass a storage key or SAS.
+        before inserting. Pass exactly one of --tenant or --legacy-partition.
+        Authentication uses DefaultAzureCredential (sign in with Azure CLI).
+        Do not pass a storage key or SAS.
         """;
 
     public string? CsvPath { get; init; }
@@ -141,6 +148,10 @@ public sealed class ImporterOptions
     public string? Account { get; init; }
 
     public string WardId { get; init; } = AppConfiguration.Ward10Id;
+
+    public string TenantId { get; init; } = "";
+
+    public bool LegacyPartition { get; init; }
 
     public int? Expected { get; init; }
 
@@ -169,8 +180,10 @@ public sealed class ImporterOptions
         string? csv = null;
         string? account = null;
         string? ward = null;
+        string? tenant = null;
         int? expected = null;
         var import = false;
+        var legacyPartition = false;
         var verify = false;
         var help = false;
 
@@ -196,6 +209,12 @@ public sealed class ImporterOptions
                     break;
                 case "--ward":
                     ward = Next(args, ref index, arg);
+                    break;
+                case "--tenant":
+                    tenant = Next(args, ref index, arg);
+                    break;
+                case "--legacy-partition":
+                    legacyPartition = true;
                     break;
                 case "--expected":
                     var raw = Next(args, ref index, arg);
@@ -243,11 +262,24 @@ public sealed class ImporterOptions
             return new ImporterOptions { Error = "--account must be the storage account name only." };
         }
 
+        var tenantId = tenant?.Trim() ?? "";
+        if (tenantId.Length > 0 && !TenantPartitions.IsCustomerTenantId(tenantId))
+        {
+            return new ImporterOptions { Error = "--tenant must be the customer account id, not an Entra directory id or a storage secret." };
+        }
+
+        if (legacyPartition == tenantId.Length > 0)
+        {
+            return new ImporterOptions { Error = "Pass exactly one of --tenant or --legacy-partition." };
+        }
+
         return new ImporterOptions
         {
             CsvPath = csv,
             Account = account,
             WardId = wardId,
+            TenantId = tenantId,
+            LegacyPartition = legacyPartition,
             Expected = expected,
             Import = import,
             Verify = verify

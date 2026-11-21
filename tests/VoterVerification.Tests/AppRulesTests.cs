@@ -334,13 +334,15 @@ public class ConfigurationDriftTests
         Assert.Contains("AndroidManifestPlaceholders", project, StringComparison.Ordinal);
         Assert.Contains("const string ClientId = \"", configuration, StringComparison.Ordinal);
         Assert.Contains("msalScheme=", project, StringComparison.Ordinal);
-        Assert.Equal("", AppConfiguration.ClientId);
+        Assert.Equal("0d3ddae7-65fa-4914-ace4-cb9659d21ccd", AppConfiguration.ClientId);
+        Assert.Equal($"msal{AppConfiguration.ClientId}://auth", AppConfiguration.RedirectUri);
     }
 
     [Fact]
     public void VoterMasterDataIsNeverWritten()
     {
         var source = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "sources", "AzureTableVoterDataService.cs"));
+        var search = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "sources", "VoterPartitionSearch.cs"));
         Assert.DoesNotContain("_voters.Add", source, StringComparison.Ordinal);
         Assert.DoesNotContain("_voters.Update", source, StringComparison.Ordinal);
         Assert.DoesNotContain("_voters.Upsert", source, StringComparison.Ordinal);
@@ -348,9 +350,10 @@ public class ConfigurationDriftTests
         Assert.Contains("_verifications.AddEntityAsync", source, StringComparison.Ordinal);
         Assert.Contains("_verifications.UpdateEntityAsync", source, StringComparison.Ordinal);
         Assert.Contains("TableUpdateMode.Replace", source, StringComparison.Ordinal);
-        Assert.Contains("VoterLookupMode.AssemblyRoll", source, StringComparison.Ordinal);
-        Assert.Contains("VoterQueryBuilder.AssemblyRoll", source, StringComparison.Ordinal);
-        Assert.Contains("MatchesHouse", source, StringComparison.Ordinal);
+        Assert.Contains("VoterLookupMode.AssemblyRoll", search, StringComparison.Ordinal);
+        Assert.Contains("VoterQueryBuilder.AssemblyRoll", search, StringComparison.Ordinal);
+        Assert.Contains("MatchesHouse", search, StringComparison.Ordinal);
+        Assert.DoesNotContain("substringof", search, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("substringof", source, StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -124,6 +124,7 @@ public class CsvAndValidationTests
         var report = VoterCsvValidator.ValidateCsv(Header + "\n" + Row(serial: "12-A", epic: "XYZ1234567", assembly: "175 / 42 / 9", epicSpaces: false));
         var entity = Assert.Single(report.ValidEntities);
         Assert.Equal("10", entity.PartitionKey);
+        Assert.Equal("", entity.TenantId);
         Assert.Equal("10", entity.WardId);
         Assert.Equal("12-A", entity.RowKey);
         Assert.Equal("12-A", entity.WardVoterSerialNumber);
@@ -196,7 +197,8 @@ public class ImportBehaviorTests
         {
             CsvText = TwoVoters(),
             Write = false,
-            AccountLabel = "wardvoters"
+            AccountLabel = "wardvoters",
+            LegacyPartition = true
         }, store, _ => true, CancellationToken.None);
 
         Assert.Equal(0, result.ExitCode);
@@ -214,13 +216,86 @@ public class ImportBehaviorTests
         var result = await ImportRunner.RunAsync(new ImportRequest
         {
             CsvText = TwoVoters(),
-            Write = false
+            Write = false,
+            LegacyPartition = true
         }, null, _ => true, CancellationToken.None);
 
         Assert.Equal(0, result.ExitCode);
         Assert.False(result.AzureChecked);
         Assert.Contains("Azure was not contacted", result.Text, StringComparison.Ordinal);
         Assert.Null(result.WriteResult);
+    }
+
+    [Fact]
+    public async Task TenantImportUsesASeparatePartitionAndDoesNotWriteDuringDryRun()
+    {
+        var store = new MemoryVoterTableStore();
+        var result = await ImportRunner.RunAsync(new ImportRequest
+        {
+            CsvText = TwoVoters(),
+            Write = false,
+            TenantId = "TENANT001"
+        }, store, _ => true, CancellationToken.None);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(0, store.InsertCalls);
+        Assert.All(result.Report.ValidEntities, entity =>
+        {
+            Assert.Equal("TENANT001|10", entity.PartitionKey);
+            Assert.Equal("10", entity.WardId);
+            Assert.Equal("TENANT001", entity.TenantId);
+        });
+    }
+
+    [Fact]
+    public async Task MissingOrCombinedPartitionOptionsWriteNothing()
+    {
+        var store = new MemoryVoterTableStore();
+        var missing = await ImportRunner.RunAsync(new ImportRequest
+        {
+            CsvText = TwoVoters(),
+            Write = true,
+            AccountLabel = "wardvoters"
+        }, store, _ => true, CancellationToken.None);
+        var both = await ImportRunner.RunAsync(new ImportRequest
+        {
+            CsvText = TwoVoters(),
+            Write = true,
+            AccountLabel = "wardvoters",
+            TenantId = "TENANT001",
+            LegacyPartition = true
+        }, store, _ => true, CancellationToken.None);
+
+        Assert.Equal(2, missing.ExitCode);
+        Assert.Equal(2, both.ExitCode);
+        Assert.False(missing.AzureChecked);
+        Assert.False(both.AzureChecked);
+        Assert.Equal(0, store.InsertCalls);
+        Assert.Empty(store.Rows);
+        Assert.Contains("exactly one", missing.Text, StringComparison.Ordinal);
+        Assert.Contains("exactly one", both.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LegacyPartitionImportKeepsTheWardKeyAndDoesNotRewriteTenant()
+    {
+        var store = new MemoryVoterTableStore();
+        var result = await ImportRunner.RunAsync(new ImportRequest
+        {
+            CsvText = TwoVoters(),
+            Write = true,
+            AccountLabel = "wardvoters",
+            LegacyPartition = true
+        }, store, _ => true, CancellationToken.None);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(2, result.WriteResult!.Inserted.Count);
+        Assert.All(store.Rows.Values, entity =>
+        {
+            Assert.Equal("10", entity.PartitionKey);
+            Assert.Equal("10", entity.WardId);
+            Assert.Equal("", entity.TenantId);
+        });
     }
 
     [Fact]
@@ -235,7 +310,8 @@ public class ImportBehaviorTests
         {
             CsvText = Header + "\n" + OneVoter(english: "Changed") + "\n" + SecondVoter(),
             Write = true,
-            AccountLabel = "wardvoters"
+            AccountLabel = "wardvoters",
+            LegacyPartition = true
         }, store, _ =>
         {
             confirmed++;
@@ -259,7 +335,8 @@ public class ImportBehaviorTests
         {
             CsvText = csv,
             Write = true,
-            AccountLabel = "wardvoters"
+            AccountLabel = "wardvoters",
+            LegacyPartition = true
         }, store, _ => true, CancellationToken.None);
 
         Assert.Equal(2, first.WriteResult!.Inserted.Count);
@@ -269,7 +346,8 @@ public class ImportBehaviorTests
         {
             CsvText = csv,
             Write = true,
-            AccountLabel = "wardvoters"
+            AccountLabel = "wardvoters",
+            LegacyPartition = true
         }, store, _ => true, CancellationToken.None);
 
         Assert.Equal(0, second.ExitCode);
@@ -289,7 +367,8 @@ public class ImportBehaviorTests
         {
             CsvText = TwoVoters(),
             Write = true,
-            AccountLabel = "wardvoters"
+            AccountLabel = "wardvoters",
+            LegacyPartition = true
         }, store, _ => false, CancellationToken.None);
 
         Assert.Equal(1, result.ExitCode);
@@ -375,9 +454,12 @@ public class ImportBehaviorTests
     [Fact]
     public void ImportFlagIsExplicitAndVerificationDoesNotTakeACsv()
     {
-        Assert.False(ImporterOptions.Parse(["--csv", "voters.csv"]).Import);
-        Assert.True(ImporterOptions.Parse(["--import", "--csv", "voters.csv", "--account", "wardvoters"]).Import);
-        Assert.NotNull(ImporterOptions.Parse(["--import", "--verify"]).Error);
+        Assert.False(ImporterOptions.Parse(["--csv", "voters.csv", "--legacy-partition"]).Import);
+        Assert.NotNull(ImporterOptions.Parse(["--csv", "voters.csv"]).Error);
+        Assert.True(ImporterOptions.Parse(["--import", "--csv", "voters.csv", "--account", "wardvoters", "--legacy-partition"]).Import);
+        Assert.NotNull(ImporterOptions.Parse(["--import", "--csv", "voters.csv", "--account", "wardvoters"]).Error);
+        Assert.NotNull(ImporterOptions.Parse(["--import", "--csv", "voters.csv", "--tenant", "TENANT001", "--legacy-partition"]).Error);
+        Assert.NotNull(ImporterOptions.Parse(["--import", "--verify", "--legacy-partition"]).Error);
         Assert.NotNull(ImporterOptions.Parse(["--account", "AccountKey=secret"]).Error);
     }
 
@@ -438,7 +520,8 @@ public class ImportBehaviorTests
         Gender = entity.Gender,
         HouseNumber = entity.HouseNumber,
         NormalizedHouseNumber = entity.NormalizedHouseNumber,
-        SectionNumber = entity.SectionNumber
+        SectionNumber = entity.SectionNumber,
+        TenantId = entity.TenantId
     };
 }
 
@@ -459,6 +542,8 @@ public class WardVerificationTests
         Assert.True(sameCount.CountMatches);
         Assert.False(sameCount.IsSuccessful);
         Assert.True(sameCount.InvalidRows > 0);
+        Assert.Equal(1, sameCount.MissingFields);
+        Assert.Contains("Missing required fields: 1", sameCount.Format(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -467,20 +552,85 @@ public class WardVerificationTests
         var stored = VoterCsvValidator.ValidateCsv(Sample()).ValidEntities.ToList();
         var passed = WardVerifier.Check(stored, "10", 2);
         Assert.True(passed.IsSuccessful);
-        Assert.Equal(2, passed.Samples.Count);
-        Assert.Equal("1", passed.Samples[0].RowKey);
+        Assert.Equal(0, passed.DuplicateSerialNumbers);
+        Assert.Equal(0, passed.DuplicateEpicNumbers);
+        Assert.Equal(0, passed.InvalidPartitionKeys);
+        Assert.Equal(0, passed.InvalidRowKeys);
 
         stored[1].EpicNumber = stored[0].EpicNumber;
         var duplicated = WardVerifier.Check(stored, "10", 2);
         Assert.False(duplicated.IsSuccessful);
-        Assert.True(duplicated.DuplicateEpicNumbers > 0);
+        Assert.Equal(1, duplicated.DuplicateEpicNumbers);
+        Assert.Contains("Duplicate EPIC count: 1", duplicated.Format(), StringComparison.Ordinal);
 
         stored[1].EpicNumber = "DEF7654321";
         stored[1].RowKey = "9";
         var keys = WardVerifier.Check(stored, "10", 2);
+        Assert.Equal(1, keys.InvalidRowKeys);
+        Assert.Equal(0, keys.InvalidPartitionKeys);
         Assert.True(keys.KeyMismatches > 0);
         Assert.False(keys.IsSuccessful);
+        Assert.Contains("Invalid RowKey count: 1", keys.Format(), StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void DefaultVerificationReportOmitsPersonalFields()
+    {
+        var stored = VoterCsvValidator.ValidateCsv(Sample()).ValidEntities.ToList();
+        stored[0].PartitionKey = "10/1";
+        stored[1].WardVoterSerialNumber = stored[0].WardVoterSerialNumber;
+        var report = WardVerifier.Check(stored, "10", 2);
+        var text = report.Format();
+
+        Assert.False(report.IsSuccessful);
+        Assert.Equal(2, report.Total);
+        Assert.Equal(2, report.Expected);
+        Assert.Equal(1, report.DuplicateSerialNumbers);
+        Assert.Equal(1, report.InvalidPartitionKeys);
+        Assert.Equal(0, report.MissingFields);
+        Assert.Contains("Expected record count: 2", text, StringComparison.Ordinal);
+        Assert.Contains("Actual stored record count: 2", text, StringComparison.Ordinal);
+        Assert.Contains("Duplicate serial count: 1", text, StringComparison.Ordinal);
+        Assert.Contains("Invalid PartitionKey count: 1", text, StringComparison.Ordinal);
+        Assert.Contains("Verification failed", text, StringComparison.Ordinal);
+
+        Assert.DoesNotContain("రాము", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("లక్ష్మి", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("సీత", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Ramu", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Lakshmi", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Sita", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("ABC1234567", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("DEF7654321", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("12-A", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("4/1", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Male", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Female", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("34", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("29", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("10/1", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Sample records", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DocumentationDistinguishesTransliterationFromTranslation()
+    {
+        var readme = File.ReadAllText(Path.Combine(ImporterRoot(), "README.md"));
+
+        Assert.Contains("NameTelugu` stores the original Telugu name exactly as supplied", readme, StringComparison.Ordinal);
+        Assert.Contains("NameEnglish` stores the English-script transliteration", readme, StringComparison.Ordinal);
+        Assert.Contains("RelativeNameTelugu` stores the original Telugu relative name", readme, StringComparison.Ordinal);
+        Assert.Contains("RelativeNameEnglish` stores its English-script transliteration", readme, StringComparison.Ordinal);
+        Assert.Contains("never translated by meaning", readme, StringComparison.Ordinal);
+        Assert.Contains("Different English spellings may be valid", readme, StringComparison.Ordinal);
+        Assert.Contains("manually correctable", readme, StringComparison.Ordinal);
+        Assert.Contains("does not silently generate or overwrite transliterations", readme, StringComparison.Ordinal);
+        Assert.Contains("Raamu", readme, StringComparison.Ordinal);
+        Assert.DoesNotContain("translated by meaning into English", readme, StringComparison.Ordinal);
+    }
+
+    private static string ImporterRoot() =>
+        Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "VoterDataImporter"));
 
     private static string Sample() =>
         """
@@ -541,6 +691,7 @@ file sealed class MemoryVoterTableStore : IVoterTableStore
         Gender = entity.Gender,
         HouseNumber = entity.HouseNumber,
         NormalizedHouseNumber = entity.NormalizedHouseNumber,
-        SectionNumber = entity.SectionNumber
+        SectionNumber = entity.SectionNumber,
+        TenantId = entity.TenantId
     };
 }

@@ -14,4 +14,6 @@ public interface IEntraAuthService
     Task SignOutAsync();
 
     Task<AccessToken> GetStorageTokenAsync(string[] scopes, CancellationToken cancellationToken);
+
+    Task<AccessToken> GetApiTokenAsync(CancellationToken cancellationToken);
 }

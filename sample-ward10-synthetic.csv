@@ -1,0 +1,3 @@
+﻿WardId,WardVoterSerialNumber,EpicNumber,AssemblyRollReference,NameTelugu,NameEnglish,RelativeNameTelugu,RelativeNameEnglish,Age,Gender,HouseNumber,NormalizedHouseNumber,SectionNumber
+10,SYNTH001,TST0000001,175/42/1,కల్పిత పేరు ఒకటి,Fictional Person One,కల్పిత బంధువు ఒకరు,Fictional Relative One,34,Male,12-A,12A,102
+10,SYNTH002,TST0000002,175/42/2,కల్పిత పేరు రెండు,Fictional Person Two,కల్పిత బంధువు ఇద్దరు,Fictional Relative Two,29,Female,12/1,121,103

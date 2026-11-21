@@ -11,10 +11,6 @@ namespace VoterVerification.Services;
 
 public sealed class AzureTableVoterDataService : IVoterDataService
 {
-    private const int PageSize = 500;
-    private const int MaxPages = 20;
-    private const int MaxHits = 50;
-
     private readonly MsalStorageCredential _credential;
     private readonly IEntraAuthService _auth;
     private readonly ILogger<AzureTableVoterDataService> _logger;
@@ -29,6 +25,9 @@ public sealed class AzureTableVoterDataService : IVoterDataService
         _voters = CreateClient(AppConfiguration.VotersTableName);
         _verifications = CreateClient(AppConfiguration.VerificationsTableName);
     }
+
+    public Task<IReadOnlyList<WardOption>> GetAssignedWardsAsync(CancellationToken cancellationToken) =>
+        Task.FromResult(WardCatalog.GetWards());
 
     public async Task<DashboardStats> GetDashboardStatsAsync(string wardId, CancellationToken cancellationToken)
     {
@@ -53,133 +52,14 @@ public sealed class AzureTableVoterDataService : IVoterDataService
     public async Task<VoterSearchOutcome> SearchAsync(string wardId, string query, CancellationToken cancellationToken)
     {
         EnsureWard(wardId);
-        var mode = VoterLookup.Classify(query);
-        if (mode == VoterLookupMode.Invalid)
-        {
-            throw new AppException(AppErrorKind.Validation, VoterLookup.ValidationMessage(query));
-        }
-
         try
         {
-            var hits = new Dictionary<string, VoterSearchHit>(StringComparer.Ordinal);
-            var truncated = false;
-            var scanLimitReached = false;
-            var trimmed = query.Trim();
-
-            if (mode == VoterLookupMode.Epic)
-            {
-                var epic = VoterLookup.NormalizeEpic(trimmed);
-                await CollectQueryAsync(
-                    _voters,
-                    VoterQueryBuilder.Epic(wardId, epic),
-                    hits,
-                    _ => true,
-                    cancellationToken);
-            }
-            else if (mode == VoterLookupMode.AssemblyRoll)
-            {
-                if (TableKeyRules.IsValid(trimmed))
-                {
-                    var exact = await ReadVoterAsync(wardId, trimmed, cancellationToken);
-                    if (exact is not null)
-                    {
-                        var hit = TableEntityMapper.ToHit(exact);
-                        hits[hit.SerialNumber] = hit;
-                    }
-                }
-
-                var reference = VoterLookup.NormalizeAssemblyRoll(trimmed);
-                truncated = await CollectQueryAsync(
-                    _voters,
-                    VoterQueryBuilder.AssemblyRoll(wardId, reference),
-                    hits,
-                    entity => VoterTextMatch.MatchesAssemblyRoll(entity.AssemblyRollReference, trimmed),
-                    cancellationToken);
-            }
-            else if (mode == VoterLookupMode.KeyAndHouse)
-            {
-                if (TableKeyRules.IsValid(trimmed))
-                {
-                    var exact = await ReadVoterAsync(wardId, trimmed, cancellationToken);
-                    if (exact is not null)
-                    {
-                        var hit = TableEntityMapper.ToHit(exact);
-                        hits[hit.SerialNumber] = hit;
-                    }
-                }
-
-                var normalizedHouse = VoterLookup.NormalizeHouse(trimmed);
-                if (normalizedHouse.Length > 0)
-                {
-                    // Prefix range on NormalizedHouseNumber. Table Storage cannot
-                    // filter with contains, so a house that only contains the
-                    // text in the middle is not requested.
-                    truncated = await CollectQueryAsync(
-                        _voters,
-                        VoterQueryBuilder.House(wardId, trimmed, normalizedHouse),
-                        hits,
-                        entity => VoterTextMatch.MatchesHouse(entity.HouseNumber, entity.NormalizedHouseNumber, trimmed),
-                        cancellationToken);
-                }
-            }
-            else
-            {
-                var pages = 0;
-                await foreach (var page in _voters.QueryAsync<VoterTableEntity>(
-                    VoterQueryBuilder.Partition(wardId),
-                    maxPerPage: PageSize,
-                    cancellationToken: cancellationToken).AsPages())
-                {
-                    pages++;
-                    foreach (var entity in page.Values)
-                    {
-                        if (!VoterTextMatch.MatchesName(
-                            entity.NameTelugu,
-                            entity.NameEnglish,
-                            entity.RelativeNameTelugu,
-                            entity.RelativeNameEnglish,
-                            trimmed))
-                        {
-                            continue;
-                        }
-
-                        var hit = TableEntityMapper.ToHit(entity);
-                        hits[hit.SerialNumber] = hit;
-                        if (hits.Count >= MaxHits)
-                        {
-                            truncated = true;
-                            break;
-                        }
-                    }
-
-                    if (truncated)
-                    {
-                        break;
-                    }
-
-                    if (pages >= MaxPages)
-                    {
-                        scanLimitReached = true;
-                        break;
-                    }
-                }
-            }
-
-            var ordered = hits.Values
-                .OrderBy(hit => hit.SerialNumber, Comparer<string>.Create(VoterTextMatch.CompareSerial))
-                .Take(MaxHits)
-                .ToArray();
-            if (hits.Count > MaxHits)
-            {
-                truncated = true;
-            }
-
-            return new VoterSearchOutcome
-            {
-                Hits = ordered,
-                Truncated = truncated,
-                ScanLimitReached = scanLimitReached
-            };
+            return await VoterPartitionSearch.SearchAsync(
+                wardId,
+                query,
+                (serial, token) => ReadVoterAsync(wardId, serial, token),
+                (filter, pageSize, token) => _voters.QueryAsync<VoterTableEntity>(filter, maxPerPage: pageSize, cancellationToken: token),
+                cancellationToken);
         }
         catch (Exception ex)
         {
@@ -275,34 +155,6 @@ public sealed class AzureTableVoterDataService : IVoterDataService
     {
         var response = await _verifications.GetEntityIfExistsAsync<VoterVerificationTableEntity>(wardId, serialNumber, cancellationToken: cancellationToken);
         return response.HasValue ? response.Value : null;
-    }
-
-    private static async Task<bool> CollectQueryAsync(
-        TableClient client,
-        string filter,
-        Dictionary<string, VoterSearchHit> hits,
-        Func<VoterTableEntity, bool> predicate,
-        CancellationToken cancellationToken)
-    {
-        await foreach (var page in client.QueryAsync<VoterTableEntity>(filter, maxPerPage: PageSize, cancellationToken: cancellationToken).AsPages())
-        {
-            foreach (var entity in page.Values)
-            {
-                if (!predicate(entity))
-                {
-                    continue;
-                }
-
-                var hit = TableEntityMapper.ToHit(entity);
-                hits[hit.SerialNumber] = hit;
-                if (hits.Count >= MaxHits)
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
     }
 
     private static async Task<int> CountAsync(TableClient client, string filter, CancellationToken cancellationToken)

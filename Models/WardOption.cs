@@ -2,6 +2,8 @@ namespace VoterVerification.Models;
 
 public sealed class WardOption
 {
+    public string TenantId { get; init; } = "";
+
     public required string WardId { get; init; }
 
     public required string DisplayName { get; init; }

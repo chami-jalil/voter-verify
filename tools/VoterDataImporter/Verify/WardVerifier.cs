@@ -21,11 +21,13 @@ public sealed class WardCheckResult
 
     public required int MissingFields { get; init; }
 
+    public required int InvalidPartitionKeys { get; init; }
+
+    public required int InvalidRowKeys { get; init; }
+
     public required int KeyMismatches { get; init; }
 
     public required IReadOnlyList<string> Problems { get; init; }
-
-    public required IReadOnlyList<VoterTableEntity> Samples { get; init; }
 
     public bool CountMatches => Total == Expected;
 
@@ -35,58 +37,58 @@ public sealed class WardCheckResult
         && DuplicateEpicNumbers == 0
         && InvalidRows == 0
         && MissingFields == 0
+        && InvalidPartitionKeys == 0
+        && InvalidRowKeys == 0
         && KeyMismatches == 0;
 
     public string Format()
     {
         var text = new StringBuilder();
-        text.AppendLine($"Ward {WardId} stored records: {Total}");
-        text.AppendLine($"Expected records: {Expected}");
-        text.AppendLine($"Duplicate serial numbers: {DuplicateSerialNumbers}");
-        text.AppendLine($"Duplicate EPIC numbers: {DuplicateEpicNumbers}");
-        text.AppendLine($"Rows with missing or invalid fields: {InvalidRows}");
-        text.AppendLine($"Missing fields: {MissingFields}");
-        text.AppendLine($"Key mismatches: {KeyMismatches}");
+        text.AppendLine($"Expected record count: {Expected}");
+        text.AppendLine($"Actual stored record count: {Total}");
+        text.AppendLine($"Missing required fields: {MissingFields}");
+        text.AppendLine($"Duplicate serial count: {DuplicateSerialNumbers}");
+        text.AppendLine($"Duplicate EPIC count: {DuplicateEpicNumbers}");
+        text.AppendLine($"Invalid PartitionKey count: {InvalidPartitionKeys}");
+        text.AppendLine($"Invalid RowKey count: {InvalidRowKeys}");
         text.AppendLine(IsSuccessful
             ? "Verification passed. The stored Voters rows match the expected ward."
             : "Verification failed. A matching CSV row count is not treated as success.");
-        foreach (var problem in Problems)
-        {
-            text.AppendLine(problem);
-        }
-
-        text.AppendLine("Sample records:");
-        if (Samples.Count == 0)
-        {
-            text.AppendLine("(none)");
-        }
-
-        foreach (var sample in Samples)
-        {
-            text.AppendLine(
-                $"{sample.RowKey} | {sample.EpicNumber} | {sample.NameTelugu} | {sample.NameEnglish} | {sample.HouseNumber} | {sample.Age} | {sample.Gender} | {sample.AssemblyRollReference}");
-        }
-
         return text.ToString();
     }
 }
 
 public static class WardVerifier
 {
-    public static WardCheckResult Check(IReadOnlyList<VoterTableEntity> stored, string wardId, int expected)
+    public static WardCheckResult Check(IReadOnlyList<VoterTableEntity> stored, string wardId, int expected, string? customerTenantId = null)
     {
         var problems = new List<string>();
+        var invalidPartitionKeys = 0;
+        var invalidRowKeys = 0;
         var keyMismatches = 0;
+        var expectedPartition = string.IsNullOrEmpty(customerTenantId) ? wardId : TenantPartitions.For(customerTenantId, wardId);
         foreach (var entity in stored)
         {
-            if (!string.Equals(entity.PartitionKey, wardId, StringComparison.Ordinal)
-                || !string.Equals(entity.WardId, wardId, StringComparison.Ordinal)
-                || !string.Equals(entity.RowKey, entity.WardVoterSerialNumber, StringComparison.Ordinal)
-                || !TableKeyRules.IsValid(entity.PartitionKey)
-                || !TableKeyRules.IsValid(entity.RowKey))
+            var partitionInvalid = !TableKeyRules.IsValid(entity.PartitionKey)
+                || !string.Equals(entity.PartitionKey, expectedPartition, StringComparison.Ordinal)
+                || (!string.IsNullOrEmpty(customerTenantId)
+                    && !string.Equals(entity.TenantId, customerTenantId, StringComparison.Ordinal));
+            var rowInvalid = !TableKeyRules.IsValid(entity.RowKey)
+                || !string.Equals(entity.RowKey, entity.WardVoterSerialNumber, StringComparison.Ordinal);
+            var wardMismatch = !string.Equals(entity.WardId, wardId, StringComparison.Ordinal);
+            if (partitionInvalid)
+            {
+                invalidPartitionKeys++;
+            }
+
+            if (rowInvalid)
+            {
+                invalidRowKeys++;
+            }
+
+            if (partitionInvalid || rowInvalid || wardMismatch)
             {
                 keyMismatches++;
-                problems.Add($"Key mismatch for RowKey '{entity.RowKey}'.");
             }
         }
 
@@ -95,20 +97,11 @@ public static class WardVerifier
             .GroupBy(entity => entity.WardVoterSerialNumber, StringComparer.Ordinal)
             .Where(group => group.Count() > 1)
             .ToList();
-        foreach (var group in duplicateSerials)
-        {
-            problems.Add($"Serial {group.Key} is stored {group.Count()} times.");
-        }
 
         var report = VoterCsvValidator.ValidateEntities(stored, wardId);
         if (stored.Count != expected)
         {
             problems.Add($"Stored count {stored.Count} does not equal expected {expected}.");
-        }
-
-        foreach (var finding in report.Findings.Where(item => item.Severity == FindingSeverity.Error))
-        {
-            problems.Add($"Stored record {finding.RowNumber}: {finding.Message}");
         }
 
         return new WardCheckResult
@@ -120,23 +113,10 @@ public static class WardVerifier
             DuplicateEpicNumbers = report.DuplicateEpicNumbers,
             InvalidRows = report.InvalidRows,
             MissingFields = report.MissingFields,
+            InvalidPartitionKeys = invalidPartitionKeys,
+            InvalidRowKeys = invalidRowKeys,
             KeyMismatches = keyMismatches,
-            Problems = problems,
-            Samples = SelectSamples(stored)
+            Problems = problems
         };
-    }
-
-    public static IReadOnlyList<VoterTableEntity> SelectSamples(IReadOnlyList<VoterTableEntity> stored)
-    {
-        var ordered = stored
-            .OrderBy(entity => entity.RowKey ?? "", Comparer<string>.Create(VoterTextMatch.CompareSerial))
-            .ToList();
-        if (ordered.Count <= 5)
-        {
-            return ordered;
-        }
-
-        var middle = ordered.Count / 2;
-        return [ordered[0], ordered[1], ordered[middle], ordered[^2], ordered[^1]];
     }
 }

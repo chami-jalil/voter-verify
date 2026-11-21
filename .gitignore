@@ -12,3 +12,6 @@ obj/
 
 # Local voter extracts. Real rolls, PDFs, and exports stay out of git.
 /imports/
+
+# Function host settings can point at a local storage emulator. Do not commit them.
+api/**/local.settings.json

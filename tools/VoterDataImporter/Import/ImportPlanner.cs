@@ -82,5 +82,6 @@ public static class VoterEntityEquality
         && left.Gender == right.Gender
         && left.HouseNumber == right.HouseNumber
         && left.NormalizedHouseNumber == right.NormalizedHouseNumber
-        && left.SectionNumber == right.SectionNumber;
+        && left.SectionNumber == right.SectionNumber
+        && left.TenantId == right.TenantId;
 }
