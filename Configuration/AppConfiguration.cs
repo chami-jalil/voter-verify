@@ -17,7 +17,7 @@ public static class AppConfiguration
     public const string StorageAccountName = "";
 
     /// <summary>HTTPS base URL of the Azure Functions app, with no function key.</summary>
-    public const string FunctionsBaseUrl = "https://voter-verification-api-ajg6g7bme2gdfv6.southindia-01.azurewebsites.net/";
+    public const string FunctionsBaseUrl = "https://voter-verification-api-ajg6g7bme2gdfvf6.southindia-01.azurewebsites.net/";
 
     /// <summary>Delegated scope of the Functions API, such as api://{api-client-id}/access_as_user.</summary>
     public const string ApiScope = "api://7a4a2c30-ff23-47c3-b599-15b3e6a71085/access_as_user";
